@@ -706,12 +706,24 @@ button{min-height:28px !important;padding:3px 7px !important}
     if(!log.length) return '<div class="sub">لا توجد عمليات طباعة أو معاينة مسجلة بعد</div>';
     return '<table style="width:100%;font-size:12.5px;border-collapse:collapse"><thead><tr>' +
       '<th style="text-align:right;padding:5px">الإجراء</th><th style="text-align:right;padding:5px">النسخة</th>' +
-      '<th style="text-align:right;padding:5px">الطبيب</th><th style="text-align:right;padding:5px">الوقت</th></tr></thead><tbody>' +
-      log.map(function(item){
+      '<th style="text-align:right;padding:5px">الطبيب</th><th style="text-align:right;padding:5px">الوقت</th><th></th></tr></thead><tbody>' +
+      log.map(function(item, idx){
         return '<tr><td style="padding:5px">' + (item.action||'') + '</td><td style="padding:5px">' +
           (item.mode==='invoice' ? 'نسخة الفواتير' : 'نسخة العرض') + '</td><td style="padding:5px">' +
-          (item.doctor||'—') + '</td><td style="padding:5px">' + fmtTs(item.ts) + '</td></tr>';
+          (item.doctor||'—') + '</td><td style="padding:5px">' + fmtTs(item.ts) + '</td>' +
+          '<td style="padding:5px">' + (item.html ? '<button class="btn btn-ghost btn-sm" data-view-log="' + idx + '">عرض المطبوع</button>' : '') + '</td></tr>';
       }).join('') + '</tbody></table>';
+  }
+
+  function viewLogSnapshot(idx){
+    var log = getLog();
+    var item = log[idx];
+    if(!item || !item.html){ alert('مفيش نسخة محفوظة لعرضها'); return; }
+    var w = window.open('', '_blank');
+    if(!w){ alert('المتصفح منع فتح نافذة جديدة، اسمح بالنوافذ المنبثقة وجرب تاني'); return; }
+    w.document.open();
+    w.document.write(item.html);
+    w.document.close();
   }
 
   function injectPanel(force){
@@ -733,6 +745,9 @@ button{min-height:28px !important;padding:3px 7px !important}
     app.appendChild(panel);
     var btn = document.getElementById('nova-toggle-print-lock');
     if(btn) btn.onclick = toggleLock;
+    panel.querySelectorAll('[data-view-log]').forEach(function(b){
+      b.onclick = function(){ viewLogSnapshot(Number(b.getAttribute('data-view-log'))); };
+    });
   }
 
   function clearUnread(){ localStorage.removeItem(UNREAD_KEY); }

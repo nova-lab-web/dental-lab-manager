@@ -719,13 +719,16 @@ button{min-height:28px !important;padding:3px 7px !important}
       var doctorName = (doctorSel && doctorSel.selectedOptions && doctorSel.selectedOptions[0]) ? doctorSel.selectedOptions[0].textContent : '';
       var from = (document.getElementById('export-from')||{}).value || '';
       var to = (document.getElementById('export-to')||{}).value || '';
+      var snapshotHTML = '';
+      try{ if(typeof makeExportHTML === 'function') snapshotHTML = makeExportHTML(); }catch(e2){}
       var log = JSON.parse(localStorage.getItem(LOG_KEY) || '[]');
       log.unshift({
         mode: MODE,
         action: actionId === 'pdf-export' ? 'طباعة' : 'معاينة',
-        doctor: doctorName, from: from, to: to, ts: Date.now()
+        doctor: doctorName, from: from, to: to, ts: Date.now(),
+        html: snapshotHTML
       });
-      log = log.slice(0, 50);
+      log = log.slice(0, 20); // capped lower since each entry now stores the full invoice snapshot
       localStorage.setItem(LOG_KEY, JSON.stringify(log));
       localStorage.setItem(UNREAD_KEY, '1');
     }catch(err){}

@@ -669,115 +669,102 @@ button{min-height:28px !important;padding:3px 7px !important}
 })();
 </script>
 
-<script id="nova-print-control">
+<style id="nova-lockdown-style">
+.locked-el{ opacity:.45 !important; cursor:not-allowed !important; pointer-events:none !important; }
+.nova-mode-banner{ background:#B3272B; color:#fff; text-align:center; font-size:12.5px; font-weight:700; padding:8px 10px; }
+</style>
+<script id="nova-lockdown-js">
 (function(){
+  // MODE is set per-file below this line: 'readonly' or 'invoice'
+  var MODE = 'invoice';
   var LOG_KEY = 'nova_dental_print_log';
   var UNREAD_KEY = 'nova_dental_print_log_unread';
   var LOCK_KEY = 'nova_dental_print_lock';
-  var CODE_KEY = 'nova_dental_print_control_code';
 
-  function fmtTs(ts){ try{ return new Date(ts).toLocaleString('ar-EG'); }catch(e){ return ''; } }
-  function getLog(){ try{ return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); }catch(e){ return []; } }
-  function isLocked(){ return localStorage.getItem(LOCK_KEY) === '1'; }
-
-  function askCode(promptMsg){
-    var saved = localStorage.getItem(CODE_KEY);
-    if(!saved){
-      var newCode = prompt('لأول مرة: اختر كود سري للتحكم في الطباعة عن بعد (احفظه في مكان آمن، هتحتاجه كل مرة)');
-      if(!newCode) return false;
-      localStorage.setItem(CODE_KEY, newCode);
-      return true;
-    }
-    var entered = prompt(promptMsg);
-    return entered === saved;
+  // Hard safety net: no matter which button gets clicked, nothing actually persists.
+  if(typeof saveKey === 'function'){
+    saveKey = function(){ return Promise.resolve(); };
   }
 
-  function toggleLock(){
-    if(!askCode('اكتب الكود السري للتحكم في الطباعة')){
-      alert('كود غير صحيح');
-      return;
-    }
-    localStorage.setItem(LOCK_KEY, isLocked() ? '0' : '1');
-    injectPanel(true);
+  var SAFE_IDS = ['export-doctor','export-from','export-to','preview-export','pdf-export','download-backup','search','back','back-doc'];
+  function isSafe(el){
+    if(el.hasAttribute('data-tab')) return MODE==='readonly';
+    if(el.hasAttribute('data-detail')) return MODE==='readonly';
+    if(el.hasAttribute('data-calc')) return true;
+    if(el.id && SAFE_IDS.indexOf(el.id) !== -1) return true;
+    return false;
   }
 
-  function buildLogHTML(){
-    var log = getLog();
-    if(!log.length) return '<div class="sub">لا توجد عمليات طباعة أو معاينة مسجلة بعد</div>';
-    return '<table style="width:100%;font-size:12.5px;border-collapse:collapse"><thead><tr>' +
-      '<th style="text-align:right;padding:5px">الإجراء</th><th style="text-align:right;padding:5px">النسخة</th>' +
-      '<th style="text-align:right;padding:5px">الطبيب</th><th style="text-align:right;padding:5px">الوقت</th></tr></thead><tbody>' +
-      log.map(function(item){
-        return '<tr><td style="padding:5px">' + (item.action||'') + '</td><td style="padding:5px">' +
-          (item.mode==='invoice' ? 'نسخة الفواتير' : 'نسخة العرض') + '</td><td style="padding:5px">' +
-          (item.doctor||'—') + '</td><td style="padding:5px">' + fmtTs(item.ts) + '</td></tr>';
-      }).join('') + '</tbody></table>';
-  }
-
-  function injectPanel(force){
-    if(typeof state === 'undefined' || state.tab !== 'settings') return;
+  function lockdown(){
     var app = document.getElementById('app');
     if(!app) return;
-    var existing = document.getElementById('nova-print-control-panel');
-    if(existing){ if(!force) return; existing.remove(); }
 
-    var panel = document.createElement('div');
-    panel.className = 'panel';
-    panel.id = 'nova-print-control-panel';
-    panel.innerHTML =
-      '<h2>🖨️ التحكم في نسختي العرض والطباعة</h2>' +
-      '<div class="sub">حالة الطباعة الآن: <b>' + (isLocked() ? 'موقوفة ⛔' : 'متاحة ✅') + '</b></div>' +
-      '<div class="export-actions" style="margin-top:8px"><button class="btn btn-primary" id="nova-toggle-print-lock">' +
-      (isLocked() ? 'إعادة تفعيل الطباعة' : 'إيقاف الطباعة الآن') + '</button></div>' +
-      '<h3 style="margin-top:16px">آخر عمليات الطباعة/المعاينة</h3>' + buildLogHTML();
-    app.appendChild(panel);
-    var btn = document.getElementById('nova-toggle-print-lock');
-    if(btn) btn.onclick = toggleLock;
+    if(MODE === 'invoice'){
+      if(typeof state !== 'undefined' && state.tab !== 'export'){ state.tab = 'export'; }
+      var nav = app.querySelector('.bottom-nav');
+      if(nav) nav.style.display = 'none';
+    }
+
+    var controls = app.querySelectorAll('button, input, select, textarea');
+    controls.forEach(function(el){
+      if(isSafe(el)) return;
+      el.disabled = true;
+      el.classList.add('locked-el');
+    });
   }
 
-  function clearUnread(){ localStorage.removeItem(UNREAD_KEY); }
+  function logPrintEvent(actionId){
+    try{
+      var doctorSel = document.getElementById('export-doctor');
+      var doctorName = (doctorSel && doctorSel.selectedOptions && doctorSel.selectedOptions[0]) ? doctorSel.selectedOptions[0].textContent : '';
+      var from = (document.getElementById('export-from')||{}).value || '';
+      var to = (document.getElementById('export-to')||{}).value || '';
+      var log = JSON.parse(localStorage.getItem(LOG_KEY) || '[]');
+      log.unshift({
+        mode: MODE,
+        action: actionId === 'pdf-export' ? 'طباعة' : 'معاينة',
+        doctor: doctorName, from: from, to: to, ts: Date.now()
+      });
+      log = log.slice(0, 50);
+      localStorage.setItem(LOG_KEY, JSON.stringify(log));
+      localStorage.setItem(UNREAD_KEY, '1');
+    }catch(err){}
+  }
 
-  function injectNotifBanner(){
-    var existing = document.getElementById('nova-print-notif');
-    if(existing) existing.remove();
-    if(localStorage.getItem(UNREAD_KEY) !== '1') return;
-    var last = getLog()[0];
-    var banner = document.createElement('div');
-    banner.id = 'nova-print-notif';
-    banner.style.cssText = 'background:#0F6E6E;color:#fff;padding:9px 14px;font-size:12.5px;text-align:center;cursor:pointer;';
-    banner.textContent = '🔔 تمت ' + (last ? last.action : 'عملية طباعة') + ' لحساب ' +
-      (last && last.doctor ? last.doctor : '—') + ' من ' +
-      (last && last.mode === 'invoice' ? 'نسخة الفواتير' : 'نسخة العرض') + ' — دوس هنا للتفاصيل';
-    banner.onclick = function(){
-      clearUnread();
-      banner.remove();
-      if(typeof state !== 'undefined'){ state.tab = 'settings'; if(typeof render === 'function') render(); }
-    };
+  // Intercept print/preview clicks BEFORE the app's own handler runs (capture phase on the stable #app container)
+  document.addEventListener('DOMContentLoaded', function(){
+    var app = document.getElementById('app');
+    if(!app) return;
+    app.addEventListener('click', function(e){
+      var id = e.target && e.target.id;
+      if(id === 'preview-export' || id === 'pdf-export'){
+        if(localStorage.getItem(LOCK_KEY) === '1'){
+          e.stopPropagation(); e.preventDefault();
+          alert('تم إيقاف الطباعة والمعاينة مؤقتًا من الإدارة.');
+          return;
+        }
+        logPrintEvent(id);
+      }
+    }, true);
+  });
+
+  var banner = document.createElement('div');
+  banner.className = 'nova-mode-banner';
+  banner.textContent = MODE === 'invoice' ? '🧾 نسخة طباعة الفواتير فقط' : '👁️ نسخة عرض فقط — بدون تعديل';
+  document.addEventListener('DOMContentLoaded', function(){
     document.body.insertBefore(banner, document.body.firstChild);
-  }
+  });
 
   if(typeof render === 'function'){
     var originalRender = render;
     render = function(){
       originalRender();
-      injectPanel(false);
+      lockdown();
     };
   }
 
-  window.addEventListener('storage', function(e){
-    if(e.key === UNREAD_KEY || e.key === LOG_KEY){ injectNotifBanner(); }
-  });
-
-  window.addEventListener('load', function(){
-    setTimeout(function(){ injectNotifBanner(); injectPanel(false); }, 400);
-  });
+  window.addEventListener('load', function(){ setTimeout(lockdown, 300); });
 })();
-</script>
-
-<script>
-if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});
-}
 </script>
 </body>
 </html>

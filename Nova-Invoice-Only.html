@@ -686,7 +686,7 @@ button{min-height:28px !important;padding:3px 7px !important}
     saveKey = function(){ return Promise.resolve(); };
   }
 
-  var SAFE_IDS = ['export-doctor','export-from','export-to','preview-export','pdf-export','download-backup','search','back','back-doc'];
+  var SAFE_IDS = ['export-doctor','export-from','export-to','preview-export','pdf-export','download-backup','search','back','back-doc','lock-pin','btn-unlock'];
   function isSafe(el){
     if(el.hasAttribute('data-tab')) return MODE==='readonly';
     if(el.hasAttribute('data-detail')) return MODE==='readonly';
